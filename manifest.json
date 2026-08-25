@@ -5,7 +5,10 @@
   "default_locale": "de",
   "description": "__MSG_extDescription__",
   "homepage_url": "https://www.geo-tool.com",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
   "action": {
     "default_title": "GEO Check",
     "default_popup": "popup.html",
@@ -25,7 +28,12 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "geo-check@geo-tool.com",
-      "strict_min_version": "121.0"
+      "strict_min_version": "121.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   }
 }
