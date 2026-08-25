@@ -48,8 +48,20 @@ extension never contacts any backend.
 - `browser_specific_settings.gecko.id` = `geo-check@geo-tool.com` (already in
   the manifest), minimum version 121.
 - Submit the same ZIP at addons.mozilla.org (free account). AMO reviews and
-  signs; source is public in this repository, which reviewers appreciate.
-- MV3 with `activeTab` + `scripting` is supported in current Firefox.
+  signs; MV3 with `activeTab` + `scripting` is supported in current Firefox.
+- **Source code upload is required** because `popup.js` ships minified:
+  upload `geo-check-extension-source.zip` (attached to the GitHub release,
+  or `git archive`) in the "Source code" step.
+- **Notes to reviewer (paste as-is):**
+
+  > Build environment: Node.js 22 (any Node >= 18 works), npm.
+  > Steps: `npm ci && npm run build` — output lands in `dist/` and matches
+  > the uploaded package except for minification; `npm run zip` produces the
+  > exact package (esbuild `--minify`). The only dependency is esbuild
+  > (dev-only). The extension makes no network requests except same-origin
+  > fetches to the active tab (page, /robots.txt, /llms.txt); `build.mjs`
+  > fails the build if a network path to our own backend appears in the
+  > bundle. Source is public: https://github.com/geo-tool-com/geo-tool-extension
 
 ## Edge Add-ons
 
