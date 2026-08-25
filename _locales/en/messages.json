@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "GEO Check — can ChatGPT read your page?",
+    "description": "Extension name in the store and browser"
+  },
+  "extDescription": {
+    "message": "Checks any page for AI readability: crawler access, schema, answer structure. Runs entirely in your browser — including staging and behind login.",
+    "description": "Store short description"
+  }
+}

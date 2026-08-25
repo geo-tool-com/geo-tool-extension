@@ -1,0 +1,10 @@
+{
+  "extName": {
+    "message": "GEO Check — sieht ChatGPT deine Seite?",
+    "description": "Extension-Name im Store und Browser"
+  },
+  "extDescription": {
+    "message": "Prüft jede Seite auf KI-Lesbarkeit: Crawler-Zugang, Schema, Antwortstruktur. Läuft komplett im Browser — auch auf Staging und hinter Login.",
+    "description": "Store-Kurzbeschreibung"
+  }
+}

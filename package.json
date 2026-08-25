@@ -1,0 +1,19 @@
+{
+  "name": "geo-tool-extension",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GEO Check browser extension: AI readability of the open tab, entirely in the browser.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geo-tool-com/geo-tool-extension.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "zip": "node build.mjs --minify && cd dist && zip -r ../geo-check-extension.zip . -x '.buildinfo'"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}
