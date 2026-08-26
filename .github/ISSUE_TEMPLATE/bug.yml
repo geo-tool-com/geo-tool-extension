@@ -1,0 +1,39 @@
+name: Bug report
+description: The extension misbehaves — wrong state, broken popup, unexpected score display
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please do NOT report security issues here — use private vulnerability reporting instead (see SUPPORT.md).
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 139 / Firefox 142 / Edge 139
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Extension version
+      placeholder: chrome://extensions → GEO Check → version
+    validations:
+      required: true
+  - type: dropdown
+    id: pagetype
+    attributes:
+      label: What kind of page was open?
+      description: The URL itself is not required — the page type usually explains the behavior.
+      options:
+        - Public website
+        - Behind login / intranet
+        - localhost / staging
+        - Browser-internal page (chrome://, Web Store, …)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect, and what happened instead?
+    validations:
+      required: true

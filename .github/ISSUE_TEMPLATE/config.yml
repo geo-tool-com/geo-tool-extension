@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/geo-tool-com/geo-tool-extension/security/advisories/new
+    about: Report security issues privately — never as a public issue.
+  - name: Questions about the hosted GEO audit
+    url: https://www.geo-tool.com/en/contact
+    about: Support for geo-tool.com (the hosted product) lives here.
