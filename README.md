@@ -1,5 +1,7 @@
 # GEO Check — browser extension
 
+![The popup scoring www.geo-tool.com: 91/100, readable for AI crawlers, with per-category bars and the crawler's no-JavaScript excerpt](docs/store-assets/popup-en.png)
+
 **Can ChatGPT read the page you are looking at?** One click on the toolbar
 icon scores the open tab for AI readability: crawler access, schema markup,
 answer structure, and what the content looks like without JavaScript —

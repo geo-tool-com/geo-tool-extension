@@ -1,34 +1,44 @@
-# Store screenshots — capture procedure
+# Store screenshots
 
-Store listings (Chrome Web Store, AMO, Edge) need 1280×800 screenshots.
 Rule: **screenshots show the real popup rendering a real score on a real
 page** — no mocked UI, no invented numbers.
 
-## Why they are not committed yet
+## What is in `store-assets/`
 
-Capturing needs a machine that can run headful Chrome with the extension
-loaded. The repository owner's CI/VPS could not keep Chrome alive long
-enough (an OOM guard there kills browser processes), so the capture runs
-on a workstation instead. Until then the store listings simply have no
-screenshots — that is visible in [store-listing.md](store-listing.md).
+| File | What it shows |
+| ---- | ------------- |
+| `popup-de.png` / `popup-en.png` | The genuine popup (viewport capture) scoring the live `www.geo-tool.com` start page — 91/100 at capture time, category bars, real crawler excerpt |
+| `store-de-1280x800.png` / `store-en-1280x800.png` | The same capture composed onto a plain brand backdrop with three verifiable claims — sized for Chrome Web Store / AMO / Edge (1280×800) |
+| `social-preview.png` | 1280×640 GitHub social preview (upload under *Settings → Social preview* is a manual step) |
 
-## Procedure (any workstation, Chrome ≥ 127)
+The scores in these images are whatever the engine computed at capture
+time. When the page or the engine changes materially, recapture rather
+than editing pixels.
+
+## How they were captured
+
+Headful Chrome under `xvfb-run`, driven by Puppeteer (maintainer tooling,
+not part of this repo):
 
 1. `npm ci && npm run build` — the popup under test is the real `dist/`.
-2. Copy `dist/` to `dist-shot/` and in the copy **only**:
-   - add `"background": {"service_worker": "shot-sw.js"}` with a one-line
-     keepalive worker, and
-   - add `"host_permissions": ["<all_urls>"]`.
-   The popup code, styles, locales, and engine stay byte-identical; the two
-   manifest additions exist because `chrome.action.openPopup()` called
-   programmatically needs a service-worker context and does not grant
-   `activeTab`. `dist-shot/` is a capture harness, never shipped.
-3. Load `dist-shot/` unpacked, open the page to score, click the toolbar
-   icon (or call `chrome.action.openPopup()` from the harness worker),
-   wait for the score, and capture the popup at `deviceScaleFactor: 2`.
-   Run once with `--lang=de` and once with `--lang=en`.
-4. Compose the popup capture onto a plain 1280×800 backdrop (brand colors
-   from `popup.css`). Do not draw fake browser chrome around it.
+2. `dist/` is copied to a `dist-shot/` harness copy and in the copy
+   **only**: a one-line keepalive `background.service_worker` and
+   `"host_permissions": ["<all_urls>"]` are added. Both exist because
+   `chrome.action.openPopup()` called programmatically needs an extension
+   context and does not grant `activeTab`. Popup code, styles, locales and
+   the engine stay byte-identical; `dist-shot/` is never shipped.
+3. The target page is opened in a tab, `chrome.action.openPopup()` is
+   called from a helper extension page, and the popup viewport is captured
+   once the score has rendered — once with `--lang=de`, once with
+   `--lang=en`.
+4. The 1280×800 store versions embed the capture unmodified on a plain
+   backdrop (palette from `popup.css`). No fake browser chrome is drawn.
 
-An automated Puppeteer version of steps 2–3 exists in the maintainers'
-tooling; the manual click path produces the identical pixels.
+A manual toolbar click on the loaded `dist/` produces the identical
+pixels — the harness only automates the click.
+
+## Still open (see store-listing.md)
+
+The suggested set also includes a client-rendered page showing the
+JavaScript visibility gap and a blocked-crawlers view; those need suitable
+public example pages and are not captured yet.
