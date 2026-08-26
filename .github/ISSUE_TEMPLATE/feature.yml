@@ -1,0 +1,21 @@
+name: Feature request
+description: An idea for the extension
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+  - type: markdown
+    attributes:
+      value: >
+        Note the extension's two hard rules — no proxy/backend requests and no
+        telemetry. Proposals that require either will be declined; everything
+        else is fair game. Scoring changes belong in the shared engine first
+        (see geo-tool-check).

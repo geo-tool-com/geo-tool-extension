@@ -25,9 +25,11 @@ bundle. That is why it can check what no server-side tool can:
 ## Privacy — the two rules
 
 1. **No proxy.** All three requests (page, `robots.txt`, `llms.txt`) are
-   same-origin to the active tab, which is why `activeTab` + `scripting` are
-   the only permissions. What cannot be fetched same-origin is reported as
-   "not checkable" — never routed through a server.
+   addressed to the active tab's own origin and run inside that tab, which is
+   why `activeTab` + `scripting` are the only permissions. If the server
+   redirects one of them elsewhere, the browser's normal CORS rules decide
+   whether the response is readable. Whatever cannot be fetched this way is
+   reported as "not checkable" — never routed through a server of ours.
 2. **No telemetry.** No version ping, no usage tracking, no result logging.
    The only contact with geo-tool.com is a link the user clicks.
 
@@ -48,6 +50,10 @@ report link.
 Share links encode the check result client-side (see `src/core/share-payload.ts`)
 and open a report page on geo-tool.com — that navigation is user-initiated
 and carries no identifiers beyond the check result itself.
+
+## Support
+
+Bug reports and feature requests: see [SUPPORT.md](SUPPORT.md).
 
 ## License
 
