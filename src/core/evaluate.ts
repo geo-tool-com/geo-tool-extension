@@ -12,7 +12,10 @@ import {
   earnedWeight,
   extractSchemaTypes,
   firstMatch,
+  metaContent,
   robotsBlocksAiBots,
+  robotsCrawlDelayAgents,
+  robotsSitemaps,
   stripTags,
   THIN_HTML_WORD_THRESHOLD,
   type TechnicalCheckLang,
@@ -43,6 +46,10 @@ export type PageEvidence = {
   /** Inhalt der robots.txt; null bedeutet "nicht abrufbar", nicht "leer". */
   robotsTxt: string | null
   llmsTxtFound: boolean
+  /** Inhalt der llms.txt, falls der Aufrufer ihn hat — erlaubt die Qualitaetspruefung. */
+  llmsTxtBody?: string | null
+  /** X-Robots-Tag der Seitenantwort; undefined = Aufrufer sieht keine Header. */
+  xRobotsTag?: string | null
   lang?: TechnicalCheckLang
 }
 
@@ -57,13 +64,13 @@ export type TechnicalEvaluation = {
 function renderNote(source: RenderedSource, en: boolean): string {
   if (source === 'proxy') {
     return en
-      ? ' (JS-rendered via proxy — plain HTML crawlers see less)'
-      : ' (JS-gerendert via Proxy — reine HTML-Crawler sehen weniger)'
+      ? ' (JS-rendered via proxy - plain HTML crawlers see less)'
+      : ' (JS-gerendert via Proxy - reine HTML-Crawler sehen weniger)'
   }
   if (source === 'browser-dom') {
     return en
-      ? ' (measured in the rendered DOM — plain HTML crawlers see less)'
-      : ' (im gerenderten DOM gemessen — reine HTML-Crawler sehen weniger)'
+      ? ' (measured in the rendered DOM - plain HTML crawlers see less)'
+      : ' (im gerenderten DOM gemessen - reine HTML-Crawler sehen weniger)'
   }
   return ''
 }
@@ -91,11 +98,11 @@ export function evaluateUnreachable(
     'fail',
     evidence.httpStatus
       ? en
-        ? `The page responds with HTTP ${evidence.httpStatus} — AI crawlers cannot read it.`
-        : `Die Seite antwortet mit HTTP ${evidence.httpStatus} — KI-Crawler können sie nicht lesen.`
+        ? `The page responds with HTTP ${evidence.httpStatus} - AI crawlers cannot read it.`
+        : `Die Seite antwortet mit HTTP ${evidence.httpStatus} - KI-Crawler können sie nicht lesen.`
       : en
-        ? 'The page did not respond (timeout or network error) — without a response there is nothing to cite.'
-        : 'Die Seite war nicht erreichbar (Timeout oder Netzwerkfehler) — ohne Antwort keine Zitierbarkeit.',
+        ? 'The page did not respond (timeout or network error) - without a response there is nothing to cite.'
+        : 'Die Seite war nicht erreichbar (Timeout oder Netzwerkfehler) - ohne Antwort keine Zitierbarkeit.',
     100
   )
   return findings
@@ -117,8 +124,8 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
     evidence.blockedDirectAccess ? 'warn' : 'pass',
     evidence.blockedDirectAccess
       ? en
-        ? `Direct access blocked (${evidence.httpStatus ? `HTTP ${evidence.httpStatus}` : 'no response'}) — content checked via render proxy. Verify whether your bot protection also locks out GPTBot, ClaudeBot & co.`
-        : `Direktzugriff blockiert (${evidence.httpStatus ? `HTTP ${evidence.httpStatus}` : 'keine Antwort'}) — Inhalt via Render-Proxy geprüft. Prüfe, ob der Bot-Schutz auch GPTBot, ClaudeBot & Co. aussperrt.`
+        ? `Direct access blocked (${evidence.httpStatus ? `HTTP ${evidence.httpStatus}` : 'no response'}) - content checked via render proxy. Verify whether your bot protection also locks out GPTBot, ClaudeBot & co.`
+        : `Direktzugriff blockiert (${evidence.httpStatus ? `HTTP ${evidence.httpStatus}` : 'keine Antwort'}) - Inhalt via Render-Proxy geprüft. Prüfe, ob der Bot-Schutz auch GPTBot, ClaudeBot & Co. aussperrt.`
       : `HTTP ${evidence.httpStatus} in ${evidence.responseMs ?? '?'} ms.`,
     15
   )
@@ -144,25 +151,44 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
     en ? 'Response time' : 'Antwortzeit',
     responseMs <= 1500 ? 'pass' : responseMs <= 4000 ? 'warn' : 'fail',
     en
-      ? `First response after ${responseMs} ms${responseMs > 1500 ? ' — crawlers abandon slow pages more often.' : '.'}`
-      : `Erste Antwort nach ${responseMs} ms${responseMs > 1500 ? ' — Crawler brechen langsame Seiten häufiger ab.' : '.'}`,
+      ? `First response after ${responseMs} ms${responseMs > 1500 ? ' - crawlers abandon slow pages more often.' : '.'}`
+      : `Erste Antwort nach ${responseMs} ms${responseMs > 1500 ? ' - Crawler brechen langsame Seiten häufiger ab.' : '.'}`,
     8
   )
 
   const robotsMeta = firstMatch(evidence.html, /<meta[^>]*name=["']robots["'][^>]*content=["']([^"']*)["']/i) ?? ''
-  const noindex = /noindex/i.test(robotsMeta)
+  // Der Header zaehlt wie das Meta-Tag — und ist im Quelltext unsichtbar.
+  const robotsDirectives = [robotsMeta, evidence.xRobotsTag ?? ''].filter(Boolean).join(', ')
+  const noindex = /noindex|\bnone\b/i.test(robotsDirectives)
   add(
     'indexable',
     en ? 'Indexable' : 'Indexierbar',
     noindex ? 'fail' : 'pass',
     noindex
       ? en
-        ? `The robots meta tag contains "${robotsMeta}" — the page forbids inclusion in search indexes.`
-        : `robots-Meta enthält "${robotsMeta}" — die Seite verbietet die Aufnahme in Suchindizes.`
+        ? `The robots directive contains "${robotsDirectives}" - the page forbids inclusion in search indexes.`
+        : `Die robots-Angabe enthält "${robotsDirectives}" - die Seite verbietet die Aufnahme in Suchindizes.`
       : en
-        ? 'No noindex — the page may appear in search and AI answers.'
-        : 'Kein noindex — die Seite darf in Suche und KI-Antworten erscheinen.',
+        ? 'No noindex - the page may appear in search and AI answers.'
+        : 'Kein noindex - die Seite darf in Suche und KI-Antworten erscheinen.',
     15
+  )
+
+  // Indexierbar, aber ohne Textauszug: die Seite darf gefunden, aber nicht
+  // zitiert werden — fuer KI-Antworten dasselbe wie unsichtbar.
+  const snippetBlocked = /nosnippet|max-snippet\s*:\s*0\b/i.test(robotsDirectives)
+  add(
+    'snippet',
+    en ? 'Snippets allowed' : 'Textauszüge erlaubt',
+    snippetBlocked ? 'fail' : 'pass',
+    snippetBlocked
+      ? en
+        ? `The robots directive contains "${robotsDirectives}" - search and AI answers may not quote any text from this page.`
+        : `Die robots-Angabe enthält "${robotsDirectives}" - Suche und KI-Antworten dürfen keinen Text dieser Seite zitieren.`
+      : en
+        ? 'No nosnippet or max-snippet:0 - text from the page may be quoted.'
+        : 'Kein nosnippet oder max-snippet:0 - Text der Seite darf zitiert werden.',
+    5
   )
 
   const blockedBots = evidence.robotsTxt ? robotsBlocksAiBots(evidence.robotsTxt) : []
@@ -172,13 +198,45 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
     blockedBots.length ? 'fail' : 'pass',
     blockedBots.length
       ? en
-        ? `robots.txt fully blocks ${blockedBots.join(', ')} — these AI search engines can never cite the page.`
-        : `robots.txt sperrt ${blockedBots.join(', ')} komplett aus — diese KI-Suchen können die Seite nie zitieren.`
+        ? `robots.txt fully blocks ${blockedBots.join(', ')} - these AI search engines can never cite the page.`
+        : `robots.txt sperrt ${blockedBots.join(', ')} komplett aus - diese KI-Suchen können die Seite nie zitieren.`
       : en
         ? 'robots.txt does not block any of the relevant AI crawlers (GPTBot, ClaudeBot, PerplexityBot, Google-Extended).'
         : 'robots.txt sperrt keinen der relevanten KI-Crawler (GPTBot, ClaudeBot, PerplexityBot, Google-Extended) aus.',
     12
   )
+
+  if (evidence.robotsTxt !== null) {
+    const delayed = robotsCrawlDelayAgents(evidence.robotsTxt)
+    add(
+      'crawl-delay',
+      en ? 'No crawl-delay for search agents' : 'Kein Crawl-delay für Suchagenten',
+      delayed.length ? 'warn' : 'pass',
+      delayed.length
+        ? en
+          ? `robots.txt sets a Crawl-delay for ${delayed.slice(0, 4).join(', ')}${delayed.length > 4 ? ` and ${delayed.length - 4} more` : ''} - most agents ignore it, the rest discover pages more slowly.`
+          : `robots.txt setzt ein Crawl-delay für ${delayed.slice(0, 4).join(', ')}${delayed.length > 4 ? ` und ${delayed.length - 4} weitere` : ''} - die meisten Agenten ignorieren es, die übrigen entdecken Seiten langsamer.`
+        : en
+          ? 'No Crawl-delay for search and AI search agents.'
+          : 'Kein Crawl-delay für Such- und KI-Suchagenten.',
+      3
+    )
+
+    const sitemaps = robotsSitemaps(evidence.robotsTxt)
+    add(
+      'sitemap',
+      en ? 'Sitemap declared' : 'Sitemap angegeben',
+      sitemaps.length ? 'pass' : 'warn',
+      sitemaps.length
+        ? en
+          ? `robots.txt declares ${sitemaps.length} sitemap${sitemaps.length > 1 ? 's' : ''}: ${(sitemaps[0] ?? '').slice(0, 90)}.`
+          : `robots.txt nennt ${sitemaps.length} Sitemap${sitemaps.length > 1 ? 's' : ''}: ${(sitemaps[0] ?? '').slice(0, 90)}.`
+        : en
+          ? 'robots.txt declares no sitemap - crawlers have to find new pages through links alone.'
+          : 'robots.txt nennt keine Sitemap - Crawler müssen neue Seiten allein über Links finden.',
+      3
+    )
+  }
 
   const title = firstMatch(evidence.html, /<title[^>]*>([\s\S]*?)<\/title>/i)
   add(
@@ -187,11 +245,11 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
     title && title.length >= 10 && title.length <= 75 ? 'pass' : title ? 'warn' : 'fail',
     title
       ? en
-        ? `"${title.slice(0, 80)}" (${title.length} characters${title.length > 75 ? ' — too long' : title.length < 10 ? ' — too short' : ''}).`
-        : `"${title.slice(0, 80)}" (${title.length} Zeichen${title.length > 75 ? ' — zu lang' : title.length < 10 ? ' — zu kurz' : ''}).`
+        ? `"${title.slice(0, 80)}" (${title.length} characters${title.length > 75 ? ' - too long' : title.length < 10 ? ' - too short' : ''}).`
+        : `"${title.slice(0, 80)}" (${title.length} Zeichen${title.length > 75 ? ' - zu lang' : title.length < 10 ? ' - zu kurz' : ''}).`
       : en
-        ? 'No title tag — search and AI answers need it as the primary label.'
-        : 'Kein Title-Tag — Suchen und KI-Antworten brauchen ihn als primäres Label.',
+        ? 'No title tag - search and AI answers need it as the primary label.'
+        : 'Kein Title-Tag - Suchen und KI-Antworten brauchen ihn als primäres Label.',
     10
   )
 
@@ -205,8 +263,8 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
         ? `${metaDescription.length} characters.`
         : `${metaDescription.length} Zeichen.`
       : en
-        ? 'No meta description — the answer preview is left to chance.'
-        : 'Keine Meta-Description — die Antwortvorschau bleibt dem Zufall überlassen.',
+        ? 'No meta description - the answer preview is left to chance.'
+        : 'Keine Meta-Description - die Antwortvorschau bleibt dem Zufall überlassen.',
     6
   )
 
@@ -221,11 +279,11 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
         : 'Die Seite hat genau eine H1.'
       : h1Matches.length === 0
         ? en
-          ? 'No H1 found — the core question of the page stays unclear to machines.'
-          : 'Keine H1 gefunden — die Kernfrage der Seite bleibt für Maschinen unklar.'
+          ? 'No H1 found - the core question of the page stays unclear to machines.'
+          : 'Keine H1 gefunden - die Kernfrage der Seite bleibt für Maschinen unklar.'
         : en
-          ? `${h1Matches.length} H1 tags found — one clear main heading is easier to extract.`
-          : `${h1Matches.length} H1-Tags gefunden — eine klare Haupt-Überschrift ist besser extrahierbar.`,
+          ? `${h1Matches.length} H1 tags found - one clear main heading is easier to extract.`
+          : `${h1Matches.length} H1-Tags gefunden - eine klare Haupt-Überschrift ist besser extrahierbar.`,
     8
   )
 
@@ -239,8 +297,8 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
         ? `Canonical points to ${canonical.slice(0, 90)}.`
         : `Canonical zeigt auf ${canonical.slice(0, 90)}.`
       : en
-        ? 'No canonical tag — duplicates can dilute citability.'
-        : 'Kein Canonical-Tag — Duplikate können die Zitierfähigkeit verwässern.',
+        ? 'No canonical tag - duplicates can dilute citability.'
+        : 'Kein Canonical-Tag - Duplikate können die Zitierfähigkeit verwässern.',
     6
   )
 
@@ -251,25 +309,33 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
     schemaTypes.length ? 'pass' : 'fail',
     schemaTypes.length
       ? en
-        ? `Detected types: ${schemaTypes.slice(0, 6).join(', ')}${schemaTypes.includes('FAQPage') ? ' — FAQPage is ideal for AI answers.' : '.'}`
-        : `Gefundene Typen: ${schemaTypes.slice(0, 6).join(', ')}${schemaTypes.includes('FAQPage') ? ' — FAQPage ist ideal für KI-Antworten.' : '.'}`
+        ? `Detected types: ${schemaTypes.slice(0, 6).join(', ')}${schemaTypes.includes('FAQPage') ? ' - FAQPage is ideal for AI answers.' : '.'}`
+        : `Gefundene Typen: ${schemaTypes.slice(0, 6).join(', ')}${schemaTypes.includes('FAQPage') ? ' - FAQPage ist ideal für KI-Antworten.' : '.'}`
       : en
-        ? 'No valid JSON-LD — structured data is the most direct route into AI answers.'
-        : 'Kein gültiges JSON-LD — strukturierte Daten sind der direkteste Weg in KI-Antworten.',
+        ? 'No valid JSON-LD - structured data is the most direct route into AI answers.'
+        : 'Kein gültiges JSON-LD - strukturierte Daten sind der direkteste Weg in KI-Antworten.',
     12
   )
 
+  // Eine llms.txt mit zwei Zeilen und ohne Link ist ein Platzhalter, kein Kontext.
+  const llmsBody = evidence.llmsTxtFound ? evidence.llmsTxtBody : null
+  const llmsLines = llmsBody ? llmsBody.split(/\r?\n/).filter((line) => line.trim()).length : 0
+  const llmsThin = typeof llmsBody === 'string' && (llmsLines < 5 || !/\]\(\S+\)|https?:\/\//.test(llmsBody))
   add(
     'llms-txt',
     'llms.txt',
-    evidence.llmsTxtFound ? 'pass' : 'warn',
+    evidence.llmsTxtFound && !llmsThin ? 'pass' : 'warn',
     evidence.llmsTxtFound
-      ? en
-        ? 'llms.txt is present — AI crawlers get curated context.'
-        : 'llms.txt ist vorhanden — KI-Crawler bekommen kuratierten Kontext.'
+      ? llmsThin
+        ? en
+          ? `llms.txt is present but thin (${llmsLines} lines${llmsLines >= 5 ? ', no linked resource' : ''}) - it should link the pages AI systems are meant to read.`
+          : `llms.txt ist vorhanden, aber dünn (${llmsLines} Zeilen${llmsLines >= 5 ? ', keine verlinkte Ressource' : ''}) - sie sollte die Seiten verlinken, die KI-Systeme lesen sollen.`
+        : en
+          ? 'llms.txt is present - AI crawlers get curated context.'
+          : 'llms.txt ist vorhanden - KI-Crawler bekommen kuratierten Kontext.'
       : en
-        ? 'No llms.txt on the domain — optional, but an easy GEO signal.'
-        : 'Keine llms.txt auf der Domain — optional, aber ein einfaches GEO-Signal.',
+        ? 'No llms.txt on the domain - optional, but an easy GEO signal.'
+        : 'Keine llms.txt auf der Domain - optional, aber ein einfaches GEO-Signal.',
     4
   )
 
@@ -278,8 +344,8 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
     en ? 'Readable content' : 'Lesbarer Inhalt',
     wordCount >= 300 ? 'pass' : wordCount >= 100 ? 'warn' : 'fail',
     en
-      ? `${wordCount} words${renderNote(evidence.renderedSource, true)}${wordCount < 300 ? ' — on client-side rendered pages crawlers may see almost nothing' : ''}.`
-      : `${wordCount} Wörter${renderNote(evidence.renderedSource, false)}${wordCount < 300 ? ' — bei client-seitig gerenderten Seiten sehen Crawler ggf. fast nichts' : ''}.`,
+      ? `${wordCount} words${renderNote(evidence.renderedSource, true)}${wordCount < 300 ? ' - on client-side rendered pages crawlers may see almost nothing' : ''}.`
+      : `${wordCount} Wörter${renderNote(evidence.renderedSource, false)}${wordCount < 300 ? ' - bei client-seitig gerenderten Seiten sehen Crawler ggf. fast nichts' : ''}.`,
     10
   )
 
@@ -296,11 +362,11 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
       jsOnly ? (evidence.directWordCount < 50 ? 'fail' : 'warn') : 'pass',
       jsOnly
         ? en
-          ? `Without JavaScript the HTML contains only ${evidence.directWordCount} words — after rendering ${wordCount}. No major AI crawler executes JavaScript: for ChatGPT, Claude & Perplexity this page is nearly empty. Your answer exists for humans, not for machines.`
-          : `Ohne JavaScript stehen nur ${evidence.directWordCount} Wörter im HTML — nach dem Rendern ${wordCount}. Kein großer KI-Crawler führt JavaScript aus: für ChatGPT, Claude & Perplexity ist diese Seite fast leer. Deine Antwort existiert für Menschen, nicht für Maschinen.`
+          ? `Without JavaScript the HTML contains only ${evidence.directWordCount} words - after rendering ${wordCount}. No major AI crawler executes JavaScript: for ChatGPT, Claude & Perplexity this page is nearly empty. Your answer exists for humans, not for machines.`
+          : `Ohne JavaScript stehen nur ${evidence.directWordCount} Wörter im HTML - nach dem Rendern ${wordCount}. Kein großer KI-Crawler führt JavaScript aus: für ChatGPT, Claude & Perplexity ist diese Seite fast leer. Deine Antwort existiert für Menschen, nicht für Maschinen.`
         : en
-          ? `The content is in the delivered HTML (${evidence.directWordCount} words) — readable without JavaScript.`
-          : `Der Inhalt steht im ausgelieferten HTML (${evidence.directWordCount} Wörter) — auch ohne JavaScript lesbar.`,
+          ? `The content is in the delivered HTML (${evidence.directWordCount} words) - readable without JavaScript.`
+          : `Der Inhalt steht im ausgelieferten HTML (${evidence.directWordCount} Wörter) - auch ohne JavaScript lesbar.`,
       12
     )
   }
@@ -315,8 +381,40 @@ export function evaluateTechnicalFindings(evidence: PageEvidence): TechnicalEval
         ? 'Viewport meta present.'
         : 'Viewport-Meta vorhanden.'
       : en
-        ? 'No viewport meta — mobile rendering is a baseline ranking signal.'
-        : 'Kein Viewport-Meta — Mobil-Darstellung ist ein Ranking-Basissignal.',
+        ? 'No viewport meta - mobile rendering is a baseline ranking signal.'
+        : 'Kein Viewport-Meta - Mobil-Darstellung ist ein Ranking-Basissignal.',
+    4
+  )
+
+  const htmlLang = firstMatch(evidence.html, /<html\b[^>]*\blang=["']([^"']+)["']/i)
+  add(
+    'html-lang',
+    en ? 'Language declared' : 'Sprache angegeben',
+    htmlLang ? 'pass' : 'warn',
+    htmlLang
+      ? en
+        ? `The page declares its language as "${htmlLang}".`
+        : `Die Seite gibt ihre Sprache mit "${htmlLang}" an.`
+      : en
+        ? 'No lang attribute on the html element - machines have to guess the language of the answer.'
+        : 'Kein lang-Attribut am html-Element - Maschinen müssen die Sprache der Antwort raten.',
+    3
+  )
+
+  // Link-Vorschau: was ein Chat zeigt, wenn die Seite als Quelle verlinkt wird.
+  const og = ['og:title', 'og:description', 'og:image'].filter((key) => metaContent(evidence.html, key))
+  const ogMissing = ['og:title', 'og:description', 'og:image'].filter((key) => !og.includes(key))
+  add(
+    'social-preview',
+    en ? 'Link preview (Open Graph)' : 'Link-Vorschau (Open Graph)',
+    ogMissing.length === 0 ? 'pass' : og.length ? 'warn' : 'fail',
+    ogMissing.length === 0
+      ? en
+        ? 'og:title, og:description and og:image are set.'
+        : 'og:title, og:description und og:image sind gesetzt.'
+      : en
+        ? `Missing: ${ogMissing.join(', ')} - without them a linked source shows up without title, text or image.`
+        : `Es fehlen: ${ogMissing.join(', ')} - ohne sie erscheint eine verlinkte Quelle ohne Titel, Text oder Bild.`,
     4
   )
   return { findings, schemaTypes, wordCount, score: scoreFromFindings(findings) }

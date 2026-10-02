@@ -98,6 +98,8 @@ async function run() {
     renderedSource: 'browser-dom',
     robotsTxt: raw.robotsTxt,
     llmsTxtFound: raw.llmsTxtFound,
+    llmsTxtBody: raw.llmsTxtBody,
+    xRobotsTag: raw.xRobotsTag,
     lang,
   }
 

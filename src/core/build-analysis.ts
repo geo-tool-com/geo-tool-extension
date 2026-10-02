@@ -21,17 +21,18 @@ import { earnedWeight, stripTags, type TechnicalFinding } from './pure'
 //   3. multimedia vergab zehn Punkte fuer einen einzigen Check.
 // Die Summe der maxScore-Werte muss 100 ergeben (siehe Test).
 const CATEGORY_FINDINGS: Record<keyof AnalysisResult['breakdown'], { ids: string[]; maxScore: number }> = {
-  directAnswers: { ids: ['answer-first', 'faq-section'], maxScore: 25 },
-  structure: { ids: ['h1', 'h2-structure', 'lists', 'comparison-table', 'depth'], maxScore: 20 },
+  directAnswers: { ids: ['answer-first', 'faq-section', 'question-headings'], maxScore: 25 },
+  structure: { ids: ['h1', 'h2-structure', 'lists', 'comparison-table', 'depth', 'heading-order', 'landmarks'], maxScore: 20 },
   // Schema ist wichtig, aber ein CMS mit SEO-Plugin liefert JSON-LD
   // automatisch — 20 Punkte dafuer waren geschenkt.
-  schemaMarkup: { ids: ['schema', 'content-schema'], maxScore: 15 },
-  citations: { ids: ['evidence', 'freshness'], maxScore: 15 },
-  multimedia: { ids: ['multimedia'], maxScore: 5 },
+  schemaMarkup: { ids: ['schema', 'content-schema', 'schema-valid', 'entity', 'website-node'], maxScore: 15 },
+  citations: { ids: ['evidence', 'freshness', 'author', 'trust-links'], maxScore: 15 },
+  multimedia: { ids: ['multimedia', 'social-preview'], maxScore: 5 },
   platformSpecific: {
     ids: [
       'reachable', 'https', 'speed', 'indexable', 'ai-bots', 'llms-txt', 'canonical',
       'title', 'meta-description', 'viewport', 'content-volume', 'js-visibility',
+      'snippet', 'crawl-delay', 'sitemap', 'html-lang',
     ],
     maxScore: 20,
   },
@@ -74,9 +75,9 @@ function suggestionFromFinding(finding: TechnicalFinding, category: string, lang
 // Handlungsempfehlung auftauchen koennen — sonst verliert eine Seite Punkte,
 // ohne je zu erfahren wofuer. `js-visibility` steht vorn: bei einer
 // client-seitig gerenderten Seite ist es der Befund mit dem groessten Hebel.
-const IMMEDIATE_IDS = ['answer-first', 'faq-section', 'comparison-table', 'evidence', 'indexable', 'ai-bots']
-const STRUCTURAL_IDS = ['h1', 'h2-structure', 'lists', 'depth', 'multimedia', 'freshness', 'content-schema', 'schema']
-const TECHNICAL_IDS = ['js-visibility', 'reachable', 'https', 'speed', 'llms-txt', 'canonical', 'title', 'meta-description', 'viewport', 'content-volume']
+const IMMEDIATE_IDS = ['answer-first', 'faq-section', 'comparison-table', 'evidence', 'indexable', 'ai-bots', 'snippet', 'question-headings', 'entity', 'author', 'trust-links']
+const STRUCTURAL_IDS = ['h1', 'h2-structure', 'lists', 'depth', 'multimedia', 'freshness', 'content-schema', 'schema', 'schema-valid', 'website-node', 'heading-order', 'landmarks']
+const TECHNICAL_IDS = ['js-visibility', 'reachable', 'https', 'speed', 'llms-txt', 'canonical', 'title', 'meta-description', 'viewport', 'content-volume', 'crawl-delay', 'sitemap', 'html-lang', 'social-preview']
 
 /**
  * Der reine Report-Aufbau. `html` dient nur noch als Quelle fuer Titel,
@@ -86,9 +87,11 @@ export function buildAnalysisResult(input: {
   technicalFindings: TechnicalFinding[]
   html: string
   url: string
+  /** Adresse nach Weiterleitungen — entscheidet, ob Startseiten-Befunde gelten. */
+  finalUrl?: string
   language: 'de' | 'en'
 }): AnalysisResult {
-  const readiness = assessContentReadiness(input.html, { lang: input.language })
+  const readiness = assessContentReadiness(input.html, { lang: input.language, url: input.finalUrl ?? input.url })
   const findings = [...input.technicalFindings, ...readiness.findings]
 
   const breakdown = Object.fromEntries(
