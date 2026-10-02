@@ -17,6 +17,9 @@ export type RawEvidence = {
   rawHtml: string | null
   robotsTxt: string | null
   llmsTxtFound: boolean
+  llmsTxtBody: string | null
+  /** X-Robots-Tag des Nachfetchs; undefined, wenn der nicht durchging. */
+  xRobotsTag?: string | null
   /** Erste Zeichen des Textes, den ein Crawler ohne JavaScript bekommt. */
   crawlerExcerpt: string
 }
@@ -62,9 +65,11 @@ export function collectEvidence(): Promise<RawEvidence> {
 
     let rawHtml: string | null = null
     let httpStatus: number | null = null
+    let xRobotsTag: string | null | undefined
     try {
       const response = await fetch(location.href, { cache: 'force-cache', credentials: 'include' })
       httpStatus = response.status
+      xRobotsTag = response.headers.get('x-robots-tag')
       if (response.ok) rawHtml = await response.text()
     } catch {
       // Bleibt null: js-visibility entfaellt dann, statt geraten zu werden.
@@ -85,6 +90,8 @@ export function collectEvidence(): Promise<RawEvidence> {
       rawHtml,
       robotsTxt,
       llmsTxtFound: llmsTxt !== null,
+      llmsTxtBody: llmsTxt,
+      xRobotsTag,
       crawlerExcerpt: rawHtml ? stripTags(rawHtml).slice(0, 320) : '',
     }
   }
